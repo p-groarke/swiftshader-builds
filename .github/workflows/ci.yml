@@ -23,8 +23,8 @@ jobs:
         build_type: [Release, Debug]
         build_arch: [x64, Win32]
         config:
-          - { toolset_ver: "v143", fea_ver: "-DFEA_CPP20=On" }
-          - { toolset_ver: "v142", fea_ver: "-DFEA_CPP20=On" }
+          - { toolset_ver: "v143" }
+          - { toolset_ver: "v142" }
 
     steps:
       - name: Git Line Endings
@@ -35,7 +35,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: 'google/swiftshader'
-          ref: ${{ github.ref_name }}
+          ref: '7f4d495c89c200c1945cce5995d348dd41dadb5a'
+          # ref: ${{ github.ref_name }}
 
       - name: Configure
         run: |
