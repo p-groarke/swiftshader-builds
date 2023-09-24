@@ -38,43 +38,42 @@ jobs:
           ref: '7f4d495c89c200c1945cce5995d348dd41dadb5a'
           # ref: ${{ github.ref_name }}
 
+      - name: Get Version
+        run: |
+          cd ${{ github.workspace }}
+          echo "release_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
       - name: Configure
         run: |
           cd ${{ github.workspace }}
-          ls
           cd build
-          cmake ..
+          cmake .. -T ${{ matrix.config.toolset_ver }} -A ${{ matrix.build_arch }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_BUILD_PARALLEL_LEVEL=2
+          ls
 
       - name: Build
         run: |
           cd ${{ github.workspace }}/build
-          cmake --build . --parallel
+          ls
+          cmake --build . --config ${{ matrix.build_type }} --parallel
 
       - name: Test
         run: |
           cd ${{ github.workspace }}/build
           ./vk-unittests
 
-      # - name: Release
-      #   uses: softprops/action-gh-release@v1
-      #   if: startsWith(github.ref, 'refs/tags/')
+      # - name: Zip
+      #   run: 
 
-    # - name: Install Python
-    #   uses: actions/setup-python@v2
-    #   with:
-    #     python-version: '3.7'
-    #     architecture: 'x64' # optional, x86
-
-    # - name: Install Conan
-    #   run: |
-    #     python --version
-    #     pip install -r ${{ github.workspace }}/requirements.txt --upgrade
-    #     conan user
-    #     conan --version
-    #     conan profile new default --detect
-
-
-
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        # if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: '${{ env.release_sha }}-win-${{ matrix.config.toolset_ver }}-${{ matrix.build_arch }}-${{ matrix.build_type }}'
+          files: |
+            build/Windows/vk_swiftshader_icd.json
+            build/bin/vk_swiftshader.dll
+            build/bin/vk_swiftshader_icd.json
+            build/bin/vulkan-1.dll
 
 
   # Clang:
