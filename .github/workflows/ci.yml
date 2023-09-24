@@ -1,0 +1,285 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: write
+
+# env:
+  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
+  # BUILD_TYPE: Release, Debug
+
+jobs:
+  create_tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git Line Endings
+        run: |
+          git config --global core.autocrlf false
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout swiftshader
+        uses: actions/checkout@v4
+        with:
+          repository: google/swiftshader
+          path: swiftshader
+
+      - name: Get Version
+        run: |
+          cd ${{ github.workspace }}/swiftshader
+          git rev-parse --short HEAD
+          echo "RELEASE_SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+      - name: Push Tag
+        run: |
+          cd ${{ github.workspace }}
+          git tag ${{ env.RELEASE_SHA }}
+          git push --tags
+
+
+  msvc:
+    runs-on: windows-latest
+    needs: create_tag
+    strategy:
+      fail-fast: true
+      matrix:
+        build_type: [Release, Debug]
+        build_arch: [x64, Win32]
+        config:
+          - { toolset_ver: "v143" }
+          - { toolset_ver: "v142" }
+
+    steps:
+      - name: Git Line Endings
+        run: |
+          git config --global core.autocrlf false
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout swiftshader
+        uses: actions/checkout@v4
+        with:
+          repository: google/swiftshader
+          path: swiftshader
+
+      - name: Get Version
+        run: |
+          cd ${{ github.workspace }}/swiftshader
+          echo "RELEASE_SHA=$(git rev-parse --short HEAD)" >> "$env:GITHUB_ENV"
+
+      - name: Configure
+        run: |
+          cd ${{ github.workspace }}/swiftshader/build
+          cmake .. -T ${{ matrix.config.toolset_ver }} -A ${{ matrix.build_arch }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_BUILD_PARALLEL_LEVEL=2
+
+      - name: Build
+        run: |
+          cd ${{ github.workspace }}/swiftshader/build
+          cmake --build . --config ${{ matrix.build_type }} --parallel
+
+      - name: Test
+        run: |
+          cd ${{ github.workspace }}/swiftshader/build
+          ls bin
+          ls bin/${{ matrix.build_type }}
+          ls ${{ matrix.build_arch }}/${{ matrix.build_type }}
+          cd ${{ matrix.build_type }}
+          ls
+          ./vk-unittests
+
+      - name: Zip
+        uses: vimtor/action-zip@v1
+        with:
+          files: |
+            ${{ github.workspace }}/swiftshader/build/${{ matrix.build_type }}/vk_swiftshader.dll
+            ${{ github.workspace }}/swiftshader/build/Windows/vk_swiftshader_icd.json
+          dest: swiftshader-${{ env.RELEASE_SHA }}-win-${{ matrix.config.toolset_ver }}-${{ matrix.build_arch }}-${{ matrix.build_type }}.zip
+
+      - name: Publish
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.RELEASE_SHA }}
+          name: swiftshader-${{ env.RELEASE_SHA }}
+          # name: 'swiftshader-${{ env.RELEASE_SHA }}-win-${{ matrix.config.toolset_ver }}-${{ matrix.build_arch }}-${{ matrix.build_type }}'
+          # repository: 'google/swiftshader'
+          files: |
+            ${{ github.workspace }}/swiftshader/build/${{ matrix.build_type }}/vk_swiftshader.dll
+            ${{ github.workspace }}/swiftshader/build/Windows/vk_swiftshader_icd.json
+            ${{ github.workspace }}/swiftshader/swiftshader-${{ env.RELEASE_SHA }}-win-${{ matrix.config.toolset_ver }}-${{ matrix.build_arch }}-${{ matrix.build_type }}.zip
+
+
+  delete_tag:
+    runs-on: ubuntu-latest
+    needs: [msvc]
+    if: ${{ always() && contains(needs.*.result, 'failure') }}
+    steps:
+      - name: Git Line Endings
+        run: |
+          git config --global core.autocrlf false
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout swiftshader
+        uses: actions/checkout@v4
+        with:
+          repository: google/swiftshader
+          path: swiftshader
+
+      - name: Get Version
+        run: |
+          cd ${{ github.workspace }}/swiftshader
+          git rev-parse --short HEAD
+          echo "RELEASE_SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+      - name: Delete Invalid Tag
+        run: |
+          cd ${{ github.workspace }}
+          echo "Detected build failure, removing tag '${{ env.RELEASE_SHA }}'"
+          git push --delete origin ${{ env.RELEASE_SHA }}
+
+
+
+  # Clang:
+  #   runs-on: ${{ matrix.config.os }}
+  #   strategy:
+  #     fail-fast: true
+  #     matrix:
+  #       build_type: [Release, Debug]
+  #       config:
+  #         - { os: macos-13, xcode_ver: "15.0-beta", fea_ver: "-DFEA_CPP20=On" } # tbd, xcode has bad c++ support
+  #         - { os: macos-13, xcode_ver: "14.3.1", fea_ver: "-DFEA_CPP17=On" }
+  #         - { os: macos-13, xcode_ver: "14.3.1", fea_ver: "-DFEA_CPP14=On" }
+  #         - { os: macos-12, xcode_ver: "13.2.1", fea_ver: "-DFEA_CPP17=On" }
+  #         - { os: macos-12, xcode_ver: "13.2.1", fea_ver: "-DFEA_CPP14=On" }
+
+  #   steps:
+  #   - name: Git Line Endings
+  #     run: |
+  #       git config --global core.autocrlf false
+
+  #   - uses: actions/checkout@v2
+
+  #   - name: Install XCode ${{ matrix.config.xcode_ver }}
+  #     uses: maxim-lobanov/setup-xcode@v1
+  #     with:
+  #       xcode-version: "${{ matrix.config.xcode_ver }}"
+
+  #   - name: Install Python
+  #     uses: actions/setup-python@v2
+  #     with:
+  #       python-version: '3.7'
+  #       architecture: 'x64' # optional, x86
+
+  #   - name: Install Conan
+  #     run: |
+  #       python --version
+  #       pip install -r ${{ github.workspace }}/requirements.txt --upgrade
+  #       conan user
+  #       conan --version
+  #       conan profile new default --detect
+  #       conan config install ${{ github.workspace }}/.github/settings.yml
+
+  #   - name: Configure
+  #     run: |
+  #       export SDKROOT=$(xcodebuild -version -sdk macosx Path)
+  #       export CPATH="$SDKROOT/usr/include"
+  #       cd ${{ github.workspace }}
+  #       mkdir build
+  #       cd build
+  #       cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} ${{ matrix.config.fea_ver }}
+
+  #   - name: Build
+  #     run: |
+  #       cd ${{ github.workspace }}/build
+  #       cmake --build . --config ${{ matrix.build_type }}
+
+  #   - name: Test
+  #     run: |
+  #       cd ${{ github.workspace }}/build
+  #       ./bin/fea_libs_tests
+  #       ./bin/fea_libs_nothrow_tests
+
+
+  # Gcc:
+  #   runs-on: ${{ matrix.config.os }}
+  #   strategy:
+  #     fail-fast: true
+  #     matrix:
+  #       build_type: [Release, Debug]
+  #       # build_arch: [x64, x86]
+  #       config:
+  #         - { os: ubuntu-22.04, gcc_ver: "12", fea_ver: "-DFEA_CPP20=On" } # bad c++20 support?
+  #         - { os: ubuntu-20.04, gcc_ver: "11", fea_ver: "-DFEA_CPP20=On" } # pretty bad c++20 support
+  #         - { os: ubuntu-20.04, gcc_ver: "10", fea_ver: "-DFEA_CPP17=On" }
+  #         - { os: ubuntu-20.04, gcc_ver: "10", fea_ver: "-DFEA_CPP14=On" }
+  #         - { os: ubuntu-20.04, gcc_ver: "9", fea_ver: "-DFEA_CPP17=On" }
+  #         - { os: ubuntu-20.04, gcc_ver: "9", fea_ver: "-DFEA_CPP14=On" }
+  #         # - { os: ubuntu-18.04, gcc_ver: "7", fea_ver: "-DFEA_CPP14=On" }
+
+  #   steps:
+  #   - name: Git Line Endings
+  #     run: |
+  #       git config --global core.autocrlf false
+
+  #   - uses: actions/checkout@v2
+
+  #   - name: Install Gcc
+  #     uses: egor-tensin/setup-gcc@v1
+  #     with:
+  #       version: ${{ matrix.config.gcc_ver }}
+  #       platform: ${{ matrix.build_arch }}
+
+  #   - name: Install Python
+  #     uses: actions/setup-python@v2
+  #     with:
+  #       python-version: '3.7'
+  #       architecture: 'x64' # optional, x86
+
+  #   - name: Install Conan
+  #     env:
+  #       CC: gcc-${{ matrix.config.gcc_ver }}
+  #       CXX: g++-${{ matrix.config.gcc_ver }}
+  #     run: |
+  #       python --version
+  #       pip install -r ${{ github.workspace }}/requirements.txt --upgrade
+  #       conan user
+  #       conan --version
+  #       conan profile new default --detect
+  #       conan profile update settings.compiler.libcxx=libstdc++11 default
+
+  #   - name: Configure
+  #     env:
+  #       CC: gcc-${{ matrix.config.gcc_ver }}
+  #       CXX: g++-${{ matrix.config.gcc_ver }}
+  #     run: |
+  #       cd ${{ github.workspace }}
+  #       mkdir build
+  #       cd build
+  #       cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} ${{ matrix.config.fea_ver }}
+
+  #   - name: Build
+  #     run: |
+  #       cd ${{ github.workspace }}/build
+  #       cmake --build . --config ${{ matrix.build_type }}
+
+  #   - name: Test
+  #     run: |
+  #       cd ${{ github.workspace }}/build
+  #       ./bin/fea_libs_tests
+  #       ./bin/fea_libs_nothrow_tests
