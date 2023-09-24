@@ -40,15 +40,20 @@ jobs:
 
       - name: Configure
         run: |
-          ls 
           cd ${{ github.workspace }}
           ls
-          cd swiftshader
+          cd build
+          cmake ..
 
+      - name: Build
+        run: |
+          cd ${{ github.workspace }}/build
+          cmake --build . --parallel
 
-        # mkdir build
-        # cd build
-        # cmake .. -T ${{ matrix.config.toolset_ver }} -A ${{ matrix.build_arch }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} ${{ matrix.config.fea_ver }}
+      - name: Test
+        run: |
+          cd ${{ github.workspace }}/build
+          ./vk-unittests
 
       # - name: Release
       #   uses: softprops/action-gh-release@v1
@@ -69,17 +74,7 @@ jobs:
     #     conan profile new default --detect
 
 
-    # - name: Build
-    #   run: |
-    #     cd ${{ github.workspace }}/build
-    #     cmake --build . --config ${{ matrix.build_type }}
 
-    # - name: Test
-    #   # working-directory: ${{ github.workspace }}/build
-    #   run: |
-    #     cd ${{ github.workspace }}/build
-    #     ./bin/fea_libs_tests
-    #     ./bin/fea_libs_nothrow_tests
 
 
   # Clang:
