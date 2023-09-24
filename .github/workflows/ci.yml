@@ -49,31 +49,33 @@ jobs:
           cd build
           cmake .. -T ${{ matrix.config.toolset_ver }} -A ${{ matrix.build_arch }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_BUILD_PARALLEL_LEVEL=2
           ls
+          cd Windows
+          ls
 
       - name: Build
         run: |
           cd ${{ github.workspace }}/build
           ls
           cmake --build . --config ${{ matrix.build_type }} --parallel
+          ls
+          cd ${{ matrix.build_type }}
+          ls
 
       - name: Test
         run: |
-          cd ${{ github.workspace }}/build
+          cd ${{ github.workspace }}/build/tests
+          ls
           ./vk-unittests
-
-      # - name: Zip
-      #   run: 
 
       - name: Release
         uses: softprops/action-gh-release@v1
         # if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: '${{ env.release_sha }}-win-${{ matrix.config.toolset_ver }}-${{ matrix.build_arch }}-${{ matrix.build_type }}'
+          name: 'swiftshader-${{ env.release_sha }}-win-${{ matrix.config.toolset_ver }}-${{ matrix.build_arch }}-${{ matrix.build_type }}'
           files: |
+            build/Windows/vk_swiftshader.dll
             build/Windows/vk_swiftshader_icd.json
-            build/bin/vk_swiftshader.dll
-            build/bin/vk_swiftshader_icd.json
-            build/bin/vulkan-1.dll
+            build/Windows/vulkan-1.dll
 
 
   # Clang:
