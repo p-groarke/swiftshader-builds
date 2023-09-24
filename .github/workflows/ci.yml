@@ -20,9 +20,6 @@ permissions:
 jobs:
   create_tag:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}
     steps:
       - name: Git Line Endings
         run: |
@@ -30,6 +27,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Checkout swiftshader
         uses: actions/checkout@v4
@@ -40,23 +39,17 @@ jobs:
       - name: Get Version
         run: |
           cd ${{ github.workspace }}/swiftshader
-          ls
           git rev-parse --short HEAD
           echo "RELEASE_SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
 
-      - name: DEBUG
-        run: |
-          echo ${{ env.RELEASE_SHA }}
-
       - name: Push Tag
         run: |
+          cd ${{ github.workspace }}
           git tag ${{ env.RELEASE_SHA }}
           git push --tags
-        # uses: actions-ecosystem/action-push-tag@v1
-        # with:
-        #   tag: ${{ env.RELEASE_SHA }}
 
-  MSVC:
+
+  msvc:
     runs-on: windows-latest
     needs: create_tag
     strategy:
@@ -87,19 +80,9 @@ jobs:
           cd ${{ github.workspace }}/swiftshader
           echo "RELEASE_SHA=$(git rev-parse --short HEAD)" >> "$env:GITHUB_ENV"
 
-      # - name: DEBUG
-      #   run: |
-      #     echo ${{ env.RELEASE_SHA }}
-
-      # - name: Push Tag
-      #   uses: actions-ecosystem/action-push-tag@v1
-      #   with:
-      #     tag: ${{ env.RELEASE_SHA }}
-
       - name: Configure
         run: |
-          cd ${{ github.workspace }}/swiftshader
-          cd build
+          cd ${{ github.workspace }}/swiftshader/build
           cmake .. -T ${{ matrix.config.toolset_ver }} -A ${{ matrix.build_arch }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_BUILD_PARALLEL_LEVEL=2
 
       - name: Build
@@ -127,7 +110,6 @@ jobs:
 
       - name: Publish
         uses: softprops/action-gh-release@v1
-        # if: startsWith(github.ref, 'refs/tags/')
         with:
           tag_name: ${{ env.RELEASE_SHA }}
           name: swiftshader-${{ env.RELEASE_SHA }}
@@ -137,6 +119,40 @@ jobs:
             ${{ github.workspace }}/swiftshader/build/${{ matrix.build_type }}/vk_swiftshader.dll
             ${{ github.workspace }}/swiftshader/build/Windows/vk_swiftshader_icd.json
             ${{ github.workspace }}/swiftshader/swiftshader-${{ env.RELEASE_SHA }}-win-${{ matrix.config.toolset_ver }}-${{ matrix.build_arch }}-${{ matrix.build_type }}.zip
+
+
+  delete_tag:
+    runs-on: ubuntu-latest
+    needs: [msvc]
+    if: ${{ always() && contains(needs.*.result, 'failure') }}
+    steps:
+      - name: Git Line Endings
+        run: |
+          git config --global core.autocrlf false
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout swiftshader
+        uses: actions/checkout@v4
+        with:
+          repository: google/swiftshader
+          path: swiftshader
+
+      - name: Get Version
+        run: |
+          cd ${{ github.workspace }}/swiftshader
+          git rev-parse --short HEAD
+          echo "RELEASE_SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+      - name: Delete Invalid Tag
+        run: |
+          cd ${{ github.workspace }}
+          echo "Detected build failure, removing tag '${{ env.RELEASE_SHA }}'"
+          git push --delete origin ${{ env.RELEASE_SHA }}
+
 
 
   # Clang:
