@@ -33,8 +33,9 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
-        repository: 'google/swiftshader'
-        ref: ${{ github.ref_name }}
+        with:
+          repository: 'google/swiftshader'
+          ref: ${{ github.ref_name }}
 
       - name: Configure
         run: |
@@ -43,7 +44,7 @@ jobs:
           ls
           cd swiftshader
 
-    
+
         # mkdir build
         # cd build
         # cmake .. -T ${{ matrix.config.toolset_ver }} -A ${{ matrix.build_arch }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} ${{ matrix.config.fea_ver }}
