@@ -89,8 +89,6 @@ jobs:
             ${{ github.workspace }}/swiftshader/build/Windows/vk_swiftshader_icd.json
           dest: swiftshader-${{ env.RELEASE_SHA }}-win-${{ matrix.config.toolset_ver }}-${{ matrix.build_arch }}-${{ matrix.build_type }}
 
-      - name:
-
       - name: Publish
         uses: softprops/action-gh-release@v1
         # if: startsWith(github.ref, 'refs/tags/')
