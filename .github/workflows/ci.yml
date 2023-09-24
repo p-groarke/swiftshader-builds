@@ -36,32 +36,47 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        path: swiftshader-build
+
+      - name: Checkout swiftshader
+        uses: actions/checkout@v4
         with:
           repository: google/swiftshader
+          path: swiftshader
           # ref: '7f4d495c89c200c1945cce5995d348dd41dadb5a'
           # ref: ${{ github.ref_name }}
 
       - name: Get Version
         run: |
-          cd ${{ github.workspace }}
-          echo "release_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          cd ${{ github.workspace }}/swiftshader
+          echo "RELEASE_SHA=$(git rev-parse --short HEAD)" >> "$env:GITHUB_ENV"
+
+      - name: DEBUG
+        run: |
+          echo ${{ env.RELEASE_SHA }}
+
+      - name: Push Tag
+        uses: actions-ecosystem/action-push-tag@v1
+        with:
+          tag: ${{ env.RELEASE_SHA }}
 
       - name: Configure
         run: |
-          cd ${{ github.workspace }}
+          cd ${{ github.workspace }}/swiftshader
           cd build
           cmake .. -T ${{ matrix.config.toolset_ver }} -A ${{ matrix.build_arch }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_BUILD_PARALLEL_LEVEL=2
 
       - name: Build
         run: |
-          cd ${{ github.workspace }}/build
+          cd ${{ github.workspace }}/swiftshader/build
           cmake --build . --config ${{ matrix.build_type }} --parallel
 
       - name: Test
         run: |
-          cd ${{ github.workspace }}/build
+          cd ${{ github.workspace }}/swiftshader/build
           ls bin
-          ls ${{ matrix.build_arch }}
+          ls bin/${{ matrix.build_type }}
+          ls ${{ matrix.build_arch }}/${{ matrix.build_type }}
           cd ${{ matrix.build_type }}
           ls
           ./vk-unittests
@@ -70,21 +85,23 @@ jobs:
         uses: vimtor/action-zip@v1
         with:
           files: |
-            ${{ github.workspace }}/build/${{ matrix.build_type }}/vk_swiftshader.dll
-            ${{ github.workspace }}/build/Windows/vk_swiftshader_icd.json
-          dest: swiftshader-${{ env.release_sha }}-win-${{ matrix.config.toolset_ver }}-${{ matrix.build_arch }}-${{ matrix.build_type }}
+            ${{ github.workspace }}/swiftshader/build/${{ matrix.build_type }}/vk_swiftshader.dll
+            ${{ github.workspace }}/swiftshader/build/Windows/vk_swiftshader_icd.json
+          dest: swiftshader-${{ env.RELEASE_SHA }}-win-${{ matrix.config.toolset_ver }}-${{ matrix.build_arch }}-${{ matrix.build_type }}
+
+      - name:
 
       - name: Publish
         uses: softprops/action-gh-release@v1
         # if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: swiftshader-${{ env.release_sha }}
-          # name: 'swiftshader-${{ env.release_sha }}-win-${{ matrix.config.toolset_ver }}-${{ matrix.build_arch }}-${{ matrix.build_type }}'
+          name: swiftshader-${{ env.RELEASE_SHA }}
+          # name: 'swiftshader-${{ env.RELEASE_SHA }}-win-${{ matrix.config.toolset_ver }}-${{ matrix.build_arch }}-${{ matrix.build_type }}'
           # repository: 'google/swiftshader'
           files: |
             ${{ github.workspace }}/build/${{ matrix.build_type }}/vk_swiftshader.dll
             ${{ github.workspace }}/build/Windows/vk_swiftshader_icd.json
-            ${{ github.workspace }}/swiftshader-${{ env.release_sha }}-win-${{ matrix.config.toolset_ver }}-${{ matrix.build_arch }}-${{ matrix.build_type }}
+            ${{ github.workspace }}/swiftshader-${{ env.RELEASE_SHA }}-win-${{ matrix.config.toolset_ver }}-${{ matrix.build_arch }}-${{ matrix.build_type }}
 
 
   # Clang:
