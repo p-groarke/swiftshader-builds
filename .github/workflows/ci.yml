@@ -41,6 +41,7 @@ jobs:
         run: |
           cd ${{ github.workspace }}/swiftshader
           ls
+          git rev-parse --short HEAD
           echo "RELEASE_SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
 
       - name: DEBUG
@@ -48,9 +49,12 @@ jobs:
           echo ${{ env.RELEASE_SHA }}
 
       - name: Push Tag
-        uses: actions-ecosystem/action-push-tag@v1
-        with:
-          tag: ${{ env.RELEASE_SHA }}
+        run: |
+          git tag ${{ env.RELEASE_SHA }}
+          git push --tags
+        # uses: actions-ecosystem/action-push-tag@v1
+        # with:
+        #   tag: ${{ env.RELEASE_SHA }}
 
   MSVC:
     runs-on: windows-latest
