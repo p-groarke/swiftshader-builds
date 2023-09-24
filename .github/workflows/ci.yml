@@ -10,6 +10,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+permissions:
+  contents: write
+
 # env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   # BUILD_TYPE: Release, Debug
@@ -34,8 +37,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          repository: 'google/swiftshader'
-          ref: '7f4d495c89c200c1945cce5995d348dd41dadb5a'
+          repository: google/swiftshader
+          # ref: '7f4d495c89c200c1945cce5995d348dd41dadb5a'
           # ref: ${{ github.ref_name }}
 
       - name: Get Version
@@ -48,34 +51,40 @@ jobs:
           cd ${{ github.workspace }}
           cd build
           cmake .. -T ${{ matrix.config.toolset_ver }} -A ${{ matrix.build_arch }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_BUILD_PARALLEL_LEVEL=2
-          ls
-          cd Windows
-          ls
 
       - name: Build
         run: |
           cd ${{ github.workspace }}/build
-          ls
           cmake --build . --config ${{ matrix.build_type }} --parallel
-          ls
-          cd ${{ matrix.build_type }}
-          ls
 
       - name: Test
         run: |
-          cd ${{ github.workspace }}/build/tests
+          cd ${{ github.workspace }}/build
+          ls bin
+          ls ${{ matrix.build_arch }}
+          cd ${{ matrix.build_type }}
           ls
           ./vk-unittests
 
-      - name: Release
+      - name: Zip
+        uses: vimtor/action-zip@v1
+        with:
+          files: |
+            ${{ github.workspace }}/build/${{ matrix.build_type }}/vk_swiftshader.dll
+            ${{ github.workspace }}/build/Windows/vk_swiftshader_icd.json
+          dest: swiftshader-${{ env.release_sha }}-win-${{ matrix.config.toolset_ver }}-${{ matrix.build_arch }}-${{ matrix.build_type }}
+
+      - name: Publish
         uses: softprops/action-gh-release@v1
         # if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: 'swiftshader-${{ env.release_sha }}-win-${{ matrix.config.toolset_ver }}-${{ matrix.build_arch }}-${{ matrix.build_type }}'
+          name: swiftshader-${{ env.release_sha }}
+          # name: 'swiftshader-${{ env.release_sha }}-win-${{ matrix.config.toolset_ver }}-${{ matrix.build_arch }}-${{ matrix.build_type }}'
+          # repository: 'google/swiftshader'
           files: |
-            build/Windows/vk_swiftshader.dll
-            build/Windows/vk_swiftshader_icd.json
-            build/Windows/vulkan-1.dll
+            ${{ github.workspace }}/build/${{ matrix.build_type }}/vk_swiftshader.dll
+            ${{ github.workspace }}/build/Windows/vk_swiftshader_icd.json
+            ${{ github.workspace }}/swiftshader-${{ env.release_sha }}-win-${{ matrix.config.toolset_ver }}-${{ matrix.build_arch }}-${{ matrix.build_type }}
 
 
   # Clang:
